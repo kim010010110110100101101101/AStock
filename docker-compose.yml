@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # A股数据系统主服务
+  astock-api:
+    build: .
+    container_name: astock-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://astock:astock123@postgres:5432/astock
+      - REDIS_URL=redis://redis:6379/0
+      - ENABLE_SCHEDULER=true
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - astock-network
+
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:13-alpine
+    container_name: astock-postgres
+    environment:
+      - POSTGRES_DB=astock
+      - POSTGRES_USER=astock
+      - POSTGRES_PASSWORD=astock123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - astock-network
+
+  # Redis 缓存
+  redis:
+    image: redis:6-alpine
+    container_name: astock-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - astock-network
+
+  # Nginx 反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: astock-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - astock-api
+    restart: unless-stopped
+    networks:
+      - astock-network
+    profiles:
+      - production
+
+  # 数据库管理工具（开发环境）
+  adminer:
+    image: adminer
+    container_name: astock-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - astock-network
+    profiles:
+      - development
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  astock-network:
+    driver: bridge

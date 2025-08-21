@@ -5,20 +5,26 @@
 ## 功能特性
 
 - 🚀 **高性能 API**: 基于 FastAPI 构建，支持异步处理
-- 📊 **多数据源**: 支持 Tushare 和 AKShare 数据源
+- 📊 **多数据源**: 支持同花顺、Tushare 和 AKShare 数据源
+- 🐅 **龙虎榜数据**: 自动获取和分析龙虎榜交易数据
 - 🕐 **定时任务**: 自动化数据更新和维护
 - 📝 **完整日志**: 结构化日志记录和错误追踪
 - 🛡️ **异常处理**: 完善的错误处理和重试机制
-- 💾 **数据存储**: SQLite/PostgreSQL 数据库支持
-- 📈 **股票数据**: 基本信息、日线数据、实时行情
+- 💾 **数据存储**: MySQL 数据库支持
+- 📈 **股票数据**: 基本信息、日线数据、龙虎榜数据
+- 🔌 **双接口支持**: 同时提供 HTTP API 和 MCP (Model Context Protocol) 接口
 
 ## 项目结构
 
 ```
 AStock/
 ├── app/
-│   ├── api/                 # API 路由
+│   ├── api/                 # HTTP API 路由
 │   │   └── endpoints/       # API 端点
+│   ├── mcp/                 # MCP 接口支持
+│   │   ├── server.py        # MCP 服务器
+│   │   ├── tools.py         # MCP 工具实现
+│   │   └── main.py          # MCP 启动脚本
 │   ├── core/                # 核心配置
 │   │   ├── config.py        # 配置管理
 │   │   ├── database.py      # 数据库连接
@@ -27,14 +33,20 @@ AStock/
 │   ├── models/              # 数据模型
 │   │   ├── stock.py         # 股票汇总模型
 │   │   ├── stock_basic.py   # 股票基本信息
-│   │   └── stock_daily.py   # 股票日线数据
+│   │   ├── stock_daily.py   # 股票日线数据
+│   │   └── dragon_tiger.py  # 龙虎榜数据模型
 │   ├── schemas/             # Pydantic 模型
+│   │   ├── stock.py         # 股票相关模式
+│   │   └── dragon_tiger.py  # 龙虎榜模式
 │   ├── services/            # 业务逻辑
 │   │   ├── crawler_service.py    # 爬虫服务
 │   │   ├── scheduler.py          # 定时任务
 │   │   └── data_sources/         # 数据源
+│   │       ├── tonghuashun.py    # 同花顺数据源
+│   │       ├── tushare_source.py # Tushare数据源
+│   │       └── akshare_source.py # AKShare数据源
 │   └── main.py              # FastAPI 应用
-├── main.py                  # 启动脚本
+├── start_server.py          # 统一启动脚本
 ├── requirements.txt         # 依赖包
 ├── .env.example            # 环境变量模板
 └── README.md               # 项目说明
@@ -79,37 +91,70 @@ cp .env.example .env
 **重要配置项：**
 
 ```env
-# 数据库配置
-DATABASE_URL=sqlite:///./astock.db
+# 数据库配置 (MySQL)
+DATABASE_URL=mysql+pymysql://root:111111@localhost:3306/astock
 
 # Tushare Token（可选，用于获取更丰富的数据）
 TUSHARE_TOKEN=your_tushare_token_here
 
 # 是否启用定时任务
-ENABLE_SCHEDULER=true
+SCHEDULER_ENABLED=true
 
 # 日志级别
 LOG_LEVEL=INFO
+
+# 龙虎榜数据源配置
+DRAGON_TIGER_ENABLED=true
+DRAGON_TIGER_SOURCE=tonghuashun
 ```
 
 ### 4. 启动服务
 
+系统支持两种接口模式：HTTP API 和 MCP (Model Context Protocol)。
+
+#### HTTP API 服务器
+
 ```bash
-# 方式1：使用启动脚本
-python main.py
+# 方式1：使用统一启动脚本（推荐）
+python start_server.py
+# 或指定HTTP模式
+python start_server.py --mode http
 
 # 方式2：直接使用 uvicorn
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-服务启动后，访问：
+#### MCP 服务器
+
+```bash
+# 启动MCP服务器
+python start_server.py --mode mcp
+
+# 或直接运行MCP模块
+python -m app.mcp.main
+```
+
+#### 同时启动两种服务器
+
+```bash
+# 同时启动HTTP API和MCP服务器
+python start_server.py --mode both
+```
+
+**HTTP API 服务启动后，访问：**
 - API 文档: http://localhost:8000/docs
 - 系统信息: http://localhost:8000/system/info
 - 健康检查: http://localhost:8000/api/v1/health
 
-## API 使用说明
+**MCP 服务器通过标准输入输出与客户端通信，适用于AI模型集成。**
 
-### 健康检查
+## 接口使用说明
+
+本系统提供两种接口形式：HTTP API 和 MCP (Model Context Protocol) 接口。
+
+### HTTP API 使用说明
+
+#### 健康检查
 
 ```bash
 # 基础健康检查
@@ -147,6 +192,9 @@ curl -X POST "http://localhost:8000/api/v1/crawler/crawl/basic"
 # 启动日线数据爬取
 curl -X POST "http://localhost:8000/api/v1/crawler/crawl/daily"
 
+# 启动龙虎榜数据爬取
+curl -X POST "http://localhost:8000/api/v1/crawler/crawl/dragon-tiger"
+
 # 获取爬虫状态
 curl "http://localhost:8000/api/v1/crawler/status"
 
@@ -154,7 +202,172 @@ curl "http://localhost:8000/api/v1/crawler/status"
 curl -X POST "http://localhost:8000/api/v1/crawler/update/000001.SZ"
 ```
 
+### 龙虎榜数据查询
+
+```bash
+# 获取龙虎榜数据列表
+curl "http://localhost:8000/api/v1/dragon-tiger?limit=20"
+
+# 按日期查询龙虎榜数据
+curl "http://localhost:8000/api/v1/dragon-tiger?trade_date=20241220"
+
+# 按股票代码查询龙虎榜数据
+curl "http://localhost:8000/api/v1/dragon-tiger?ts_code=000617.SZ"
+
+# 获取龙虎榜统计信息
+curl "http://localhost:8000/api/v1/dragon-tiger/stats"
+```
+
+### MCP 接口使用说明
+
+MCP (Model Context Protocol) 是一个标准化协议，用于AI模型与外部工具和数据源的交互。本系统提供的MCP接口可以让AI模型直接调用股票数据查询功能。
+
+#### MCP 工具列表
+
+系统提供以下MCP工具：
+
+1. **get_stocks** - 获取股票列表
+   - 支持按市场、行业筛选
+   - 支持分页查询
+   - 可筛选活跃/非活跃股票
+
+2. **get_stock_detail** - 获取股票详细信息
+   - 包含基本信息、财务数据、最新价格
+   - 需要提供股票代码参数
+
+3. **get_dragon_tiger_summary** - 获取龙虎榜汇总数据
+   - 支持按日期、股票代码、上榜原因筛选
+   - 支持分页查询
+
+4. **get_dragon_tiger_detail** - 获取龙虎榜详细数据
+   - 显示具体买卖席位信息
+   - 支持按交易类型筛选
+
+5. **start_crawler** - 启动数据爬取任务
+   - 支持基本信息、日线数据、全量数据爬取
+   - 可指定特定股票或日期范围
+
+#### MCP 客户端集成示例
+
+**Python 客户端示例：**
+
+```python
+import asyncio
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+async def main():
+    # 连接到MCP服务器
+    server_params = StdioServerParameters(
+        command="python",
+        args=["-m", "app.mcp.main"]
+    )
+    
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            # 初始化
+            await session.initialize()
+            
+            # 获取可用工具
+            tools = await session.list_tools()
+            print(f"Available tools: {[tool.name for tool in tools.tools]}")
+            
+            # 调用工具：获取股票列表
+            result = await session.call_tool(
+                "get_stocks",
+                arguments={"limit": 10, "market": "主板"}
+            )
+            print(f"Stocks: {result.content[0].text}")
+            
+            # 调用工具：获取龙虎榜数据
+            result = await session.call_tool(
+                "get_dragon_tiger_summary",
+                arguments={"page_size": 5}
+            )
+            print(f"Dragon Tiger: {result.content[0].text}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+**Claude Desktop 集成：**
+
+在 Claude Desktop 的配置文件中添加：
+
+```json
+{
+  "mcpServers": {
+    "astock": {
+      "command": "python",
+      "args": ["-m", "app.mcp.main"],
+      "cwd": "/path/to/AStock"
+    }
+  }
+}
+```
+
+**VS Code 集成：**
+
+使用 MCP 扩展，配置服务器连接：
+
+```json
+{
+  "mcp.servers": [
+    {
+      "name": "AStock Data",
+      "command": "python",
+      "args": ["-m", "app.mcp.main"],
+      "cwd": "/path/to/AStock"
+    }
+  ]
+}
+```
+
+#### MCP 工具调用示例
+
+**获取股票信息：**
+```json
+{
+  "tool": "get_stocks",
+  "arguments": {
+    "limit": 20,
+    "market": "主板",
+    "industry": "银行",
+    "is_active": true
+  }
+}
+```
+
+**获取龙虎榜数据：**
+```json
+{
+  "tool": "get_dragon_tiger_summary",
+  "arguments": {
+    "trade_date": "2024-12-20",
+    "page_size": 10
+  }
+}
+```
+
+**启动数据爬取：**
+```json
+{
+  "tool": "start_crawler",
+  "arguments": {
+    "crawler_type": "basic"
+  }
+}
+```
+
 ## 数据源配置
+
+### 同花顺配置
+
+同花顺龙虎榜数据源无需额外配置，开箱即用。特点：
+- 实时获取龙虎榜数据
+- 包含详细的买卖席位信息
+- 支持历史数据查询
+- 免费使用，但请合理控制访问频率
 
 ### Tushare 配置
 
@@ -169,17 +382,25 @@ AKShare 无需配置，开箱即用。但请注意：
 - 数据更新可能有延迟
 - 部分高级功能需要付费
 
+### MySQL 数据库配置
+
+1. 安装 MySQL 服务器
+2. 创建数据库：`CREATE DATABASE astock CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+3. 配置连接信息：`DATABASE_URL=mysql+pymysql://username:password@localhost:3306/astock`
+4. 安装 Python MySQL 驱动：`pip install pymysql mysqlclient`
+
 ## 定时任务
 
 系统支持以下定时任务：
 
 - **股票基本信息更新**: 每天早上 8:00
 - **日线数据更新**: 每天下午 6:00（可配置）
+- **龙虎榜数据更新**: 每天晚上 8:00（交易日）
 - **增量数据更新**: 交易日每 30 分钟
 - **数据库清理**: 每周日凌晨 2:00
 - **系统健康检查**: 每小时
 
-可通过环境变量 `ENABLE_SCHEDULER=false` 禁用定时任务。
+可通过环境变量 `SCHEDULER_ENABLED=false` 禁用定时任务。
 
 ## 日志管理
 
@@ -245,12 +466,16 @@ ENVIRONMENT=production
 DEBUG=false
 LOG_LEVEL=WARNING
 
-# 使用 PostgreSQL
-DATABASE_URL=postgresql://user:password@localhost/astock
+# 使用 MySQL
+DATABASE_URL=mysql+pymysql://user:password@localhost:3306/astock
 
 # 安全配置
 ALLOWED_HOSTS=["yourdomain.com"]
 SECRET_KEY=your-secret-key
+
+# 龙虎榜配置
+DRAGON_TIGER_ENABLED=true
+SCHEDULER_ENABLED=true
 ```
 
 ## 常见问题

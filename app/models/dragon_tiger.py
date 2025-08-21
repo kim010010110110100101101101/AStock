@@ -1,9 +1,36 @@
+"""龙虎榜数据模型模块
+
+该模块定义了龙虎榜相关的数据库模型，包括:
+- DragonTiger: 龙虎榜明细数据模型
+- DragonTigerSummary: 龙虎榜汇总数据模型
+
+龙虎榜是沪深交易所公布的当日成交量、成交金额最大的前5只证券
+及前5只涨跌幅偏离值最大的证券，是重要的市场参考指标。
+"""
+
 from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Index
 from sqlalchemy.sql import func
 from app.core.database import Base
 
+
 class DragonTiger(Base):
-    """龙虎榜数据模型"""
+    """龙虎榜明细数据模型
+    
+    存储每日龙虎榜的详细交易数据，包括买卖双方的营业部信息、
+    交易金额、上榜原因等。每条记录代表一个营业部在某只股票
+    某个交易日的买入或卖出情况。
+    
+    Attributes:
+        ts_code: 股票代码（如000001.SZ）
+        stock_name: 股票名称
+        trade_date: 交易日期（YYYYMMDD格式）
+        close_price: 当日收盘价
+        pct_change: 当日涨跌幅百分比
+        reason: 上榜原因描述
+        buy_dept: 买入营业部名称
+        sell_dept: 卖出营业部名称
+        net_amount: 净买入金额（万元）
+    """
     __tablename__ = "dragon_tiger"
     
     # 主键
@@ -61,7 +88,25 @@ class DragonTiger(Base):
         return f"<DragonTiger(ts_code='{self.ts_code}', trade_date='{self.trade_date}', reason='{self.reason}')>"
 
 class DragonTigerSummary(Base):
-    """龙虎榜汇总数据模型"""
+    """龙虎榜汇总数据模型
+    
+    对同一股票同一交易日的龙虎榜数据进行汇总统计，
+    提供该股票当日的整体龙虎榜表现概览。
+    
+    与DragonTiger的区别:
+    - DragonTiger: 记录每个营业部的详细买卖情况
+    - DragonTigerSummary: 汇总同一股票当日所有营业部的数据
+    
+    Attributes:
+        ts_code: 股票代码
+        stock_name: 股票名称
+        trade_date: 交易日期
+        reasons: 所有上榜原因的JSON列表
+        total_buy_amount: 当日总买入金额
+        total_sell_amount: 当日总卖出金额
+        net_amount: 当日净买入金额
+        institution_net_amount: 机构净买入金额
+    """
     __tablename__ = "dragon_tiger_summary"
     
     # 主键

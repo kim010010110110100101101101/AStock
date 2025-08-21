@@ -1,3 +1,18 @@
+"""数据爬取服务模块
+
+该模块提供统一的数据爬取服务，支持从多个数据源获取股票相关数据。
+主要功能包括:
+- 股票基本信息爬取
+- 股票日线数据爬取
+- 数据源管理和切换
+- 错误处理和重试机制
+- 批量数据处理和存储
+
+支持的数据源:
+- Tushare (主要数据源)
+- AKShare (备用数据源)
+"""
+
 import asyncio
 import time
 from typing import Optional, List
@@ -11,8 +26,30 @@ from app.core.config import settings
 from app.services.data_sources import TushareDataSource
 # from app.services.data_sources import AkshareDataSource  # 暂时注释掉
 
+
 class CrawlerService:
-    """数据爬取服务"""
+    """数据爬取服务类
+    
+    提供统一的数据爬取接口，自动管理多个数据源，
+    实现数据的获取、处理和存储。
+    
+    Features:
+        - 多数据源支持和自动切换
+        - 异步数据爬取提高效率
+        - 批量数据处理减少数据库压力
+        - 完善的错误处理和日志记录
+        - 增量更新避免重复数据
+    
+    Args:
+        db: SQLAlchemy数据库会话
+        
+    Example:
+        ```python
+        crawler = CrawlerService(db)
+        await crawler.crawl_stock_basic()
+        await crawler.crawl_daily_data(['000001.SZ'])
+        ```
+    """
     
     def __init__(self, db: Session):
         self.db = db

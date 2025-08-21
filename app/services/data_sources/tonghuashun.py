@@ -1,3 +1,22 @@
+"""同花顺龙虎榜数据源模块
+
+该模块实现了从同花顺网站爬取龙虎榜数据的功能。
+同花顺是国内知名的金融数据服务商，提供实时、准确的龙虎榜数据。
+
+主要功能:
+- 爬取指定日期的龙虎榜数据
+- 解析HTML页面提取结构化数据
+- 数据清洗和格式化
+- 异步HTTP请求提高爬取效率
+- 完善的错误处理和重试机制
+
+数据来源: http://data.10jqka.com.cn/market/longhu/
+
+Note:
+    该模块需要处理反爬虫机制，包括User-Agent伪装、
+    请求频率控制等。使用时需要遵守网站的robots.txt规则。
+"""
+
 import asyncio
 import aiohttp
 import json
@@ -16,10 +35,37 @@ from sqlalchemy import and_
 
 logger = get_logger('crawler')
 
+
 class TongHuaShunDragonTiger:
-    """同花顺龙虎榜数据源"""
+    """同花顺龙虎榜数据源类
+    
+    负责从同花顺网站爬取龙虎榜数据，支持异步操作和上下文管理。
+    
+    Features:
+        - 异步HTTP请求提高爬取效率
+        - 自动会话管理和连接池
+        - HTML解析和数据提取
+        - 数据格式化和验证
+        - 完善的错误处理机制
+    
+    Usage:
+        ```python
+        async with TongHuaShunDragonTiger() as crawler:
+            data = await crawler.get_dragon_tiger_data('20231201')
+        ```
+    
+    Attributes:
+        base_url: 同花顺数据网站基础URL
+        dragon_tiger_url: 龙虎榜数据页面URL
+        headers: HTTP请求头，包含User-Agent等信息
+        session: aiohttp客户端会话对象
+    """
     
     def __init__(self):
+         """初始化同花顺龙虎榜数据源
+         
+         设置基础URL、请求头等配置信息。
+         """
         self.base_url = "http://data.10jqka.com.cn"
         self.dragon_tiger_url = f"{self.base_url}/market/longhu/"
         self.headers = {
